@@ -67,7 +67,8 @@ caught_rank %>%
         angle = 0,
         margin = margin(),
         debug = FALSE
-      )
+      ),
+    panel.background = element_rect(color = "#FAFAFA")
   ) +
 
     labs(title = "Shaggy switches to Sativa",
@@ -77,3 +78,12 @@ caught_rank %>%
          caption = 'Source: Kaggle'
          )
 
+ggsave(
+  here::here('figures', '03-rank-caught.png'),
+  width = 85 * (14 / 5),
+  height = 53 * (14 / 5),
+  units = 'mm',
+  dpi = 300,
+  type = 'cairo',
+  device = agg_png()
+)

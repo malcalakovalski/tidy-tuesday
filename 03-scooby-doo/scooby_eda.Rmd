@@ -1,0 +1,198 @@
+---
+title: "Week 29 — Scooby Doo"
+author: "Manuel Alcalá Kovalski"
+date: "7/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages}
+librarian::shelf(tidyverse, systemfonts, ggtext, ragg)
+```
+
+```{r load-data}
+scoobydoo <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2021/2021-07-13/scoobydoo.csv', na = 'NULL')
+```
+
+```{r}
+scoobydoo %>% 
+  glimpse()
+
+scoobydoo %>% 
+  skimr::skim()
+```
+
+## How many were caught by each character
+```{r}
+scoobydoo %>% 
+  select(starts_with('caught')) %>% 
+  mutate(across(where(is.character),
+                as.logical)) %>% 
+  pivot_longer(everything(),
+               names_to = 'caught_by',
+               names_prefix = 'caught_') %>% 
+  count(caught_by, wt = value) %>% 
+  arrange(desc(n))
+```
+
+```{r}
+scoobydoo %>% 
+  select(starts_with('captured')) %>% 
+  mutate(across(where(is.character),
+                as.logical)) %>% 
+  pivot_longer(everything(),
+               names_to = 'captured',
+               names_prefix = 'captured_') %>% 
+  count(captured, wt = value) %>% 
+  arrange(desc(n))
+```
+
+```{r}
+scoobydoo %>% 
+  select(caught_not)
+```
+
+```{r}
+scoobydoo %>% 
+  select(monster_type)
+
+tidy_scooby <-
+  scoobydoo %>% 
+    pivot_longer(starts_with('caught'),
+               names_to = 'caught_by',
+               names_prefix = 'caught_',
+               values_to = 'caught') %>% 
+  mutate(caught_by = snakecase::to_title_case(caught_by)) %>% 
+  separate_rows(monster_type, sep = ',', convert = TRUE) %>% 
+  drop_na(monster_type) %>%
+  # What's a better way of iterating this?
+  filter(monster_type != '') %>%
+ mutate(across(monster_type,
+               ~ str_trim(.x) %>% as_factor),
+        monster_type = recode(monster_type,
+                              Possessed = "Possessed Object",
+                              Disguise = "Disguised")) 
+
+
+
+```
+
+
+```{r}
+monsters_sum <-
+  tidy_scooby %>% 
+  select(monster_type, caught_by, caught) %>% 
+  filter(caught_by != 'none') %>% 
+  mutate(across(ends_with('type'),
+                   fct_lump_n,
+                   n = 10)) %>%
+  group_by(monster_type) %>% 
+  count(wt = caught, sort = TRUE) %>% 
+  ungroup() %>% 
+  mutate(monster_type = fct_rev(fct_inorder(monster_type)),
+         monster_type = forcats::fct_relevel(monster_type, "Other", after = 0L),
+         perc = scales::percent(n / sum(n), accuracy = .1, trim = FALSE)) 
+
+```
+
+
+```{r}
+
+
+monsters_sum <-
+  monsters_sum %>% 
+  mutate(
+    color = case_when(
+      row_number() == 1 ~ "#003A79",
+      row_number() == 2 ~ "#F26D00",
+      row_number() == 3 ~ "#F5CC00",
+      monster_type == "Other" ~ "#D0D3D4",
+      ## all others should be gray
+      TRUE ~ "#666666"
+    )
+  )
+monsters_sum %>% 
+  ggplot(aes(x =monster_type ,
+             y = n,
+             fill = color)) +
+  geom_col() +
+  
+  geom_label(
+    aes(label = perc), 
+    hjust = 1, nudge_y = -2.5,
+    size = 4, fontface = "bold", family = "Roboto",
+    ## turn into white box without outline
+    fill = "#FAFAFA", label.size = 0,
+    color = "#003A79"
+  ) +
+  scale_y_continuous(expand = c(.01, .01)) +
+  scale_fill_identity(guide = "none") +
+  theme_void() +
+  theme(
+    text =
+      element_text(
+        family = "Roboto",
+        face = "plain",
+        colour = "black",
+        size = 16,
+        lineheight = 0.9,
+        hjust = 0.5,
+        vjust = 0.5,
+        angle = 0,
+        margin = margin(),
+        debug = FALSE
+      ),
+      plot.title =         ggtext::element_textbox_simple(
+      # font size "large"
+      size = rel(1.2),
+      color = "#003A79",
+      face = "bold",
+      hjust = 0,
+      vjust = 1,
+      margin = margin(b = 8)
+    ),
+    plot.title.position = "plot",
+    plot.subtitle =      ggtext::element_textbox_simple(
+      # font size "regular"
+      hjust = 0,
+
+      vjust = 1,
+      margin = margin(b = 8)
+    ),
+    plot.caption =       ggtext::element_textbox_simple(
+      # font size "small"
+      size = rel(0.8),
+      vjust = 1,
+      family = "Roboto Light",
+      color = "#666666",
+      hjust = 0,
+      margin = margin(t = 8)
+    ),
+    plot.caption.position = "plot",
+    axis.text.y = element_text(size = 14, hjust = 1),
+    plot.margin = margin(rep(15, 4)),
+    panel.background = element_rect(color = "#FAFAFA")
+  ) +
+  coord_flip() +
+  labs(title = "Scooby Scooby *Boo!*",
+       subtitle = "Top 10 monsters",
+       caption = "**Source**: Kaggle")
+  
+ggsave(
+  here::here('figures', '03-scooby-doo-monsters.png'),
+  width = 85 * (14 / 5),
+  height = 53 * (14 / 5),
+  units = 'mm',
+  dpi = 300, 
+  type = 'cairo',
+  device = agg_png()
+)
+
+
+
+
+```
+
