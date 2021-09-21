@@ -49,6 +49,7 @@ p1 <-
   theme(
     panel.grid = element_blank(),
     axis.ticks.y = element_line(),
+    plot.background = element_rect(fill = "#F2F7FA"),
     panel.background = element_rect(fill = "#F2F7FA"),
     text = element_text(family = 'Lato'),
     plot.title = element_textbox_simple(
@@ -79,6 +80,7 @@ p1 <-
     legend.position = 'top',
     legend.spacing.x = unit(1, 'cm'),
     legend.text = element_text(size = rel(2), family = 'Lato'),
+    legend.background = element_rect(fill = '#F2F7FA'),
     axis.ticks = element_line(size = 0),
     strip.text = element_textbox_simple(
       padding = margin(5.5, 5.5, 5.5, 5.5),
@@ -90,6 +92,7 @@ p1 <-
   guides(
     fill = guide_legend(
       reverse = TRUE,
+
       label.position = 'top',
       override.aes = list(shape = 1),
       title.position = 'top',
@@ -104,6 +107,12 @@ p1 <-
 p1
 
 # Adding logo -------------------------------------------------------------
+logo <-
+  image_read('13-emmys/logo.jpg') %>%
+  image_convert('png') %>%
+  image_transparent('white') %>%
+  image_resize("400x400")
+
 
 ggdraw() +
   draw_plot(p1) +
@@ -120,7 +129,7 @@ ggdraw() +
 
 path <-  here::here("13-emmys/netflix")
 
-ggsave(glue::glue("{path}.pdf"), width = 14.5, height = 10.5, device = cairo_pdf)
+ggsave(glue::glue("{path}.pdf"), width = 14.5, height = 10.5, device = cairo_pdf, bg = '#F2F7FA')
 
 pdftools::pdf_convert(pdf = glue::glue("{path}.pdf"),
                       filenames = glue::glue("{path}.png"),
