@@ -26,7 +26,6 @@ features <-
   music %>%
  # filter(lubridate::year(week_id) >= 2020) %>%
   pivot_longer(c(danceability, energy, loudness, speechiness, acousticness, instrumentalness, liveness, valence, tempo)) %>%
-  mutate(name = snakecase::to_title_case(name)) %>%
   group_by(week_id, name) %>%
   summarise(value = mean(value, na.rm = TRUE)) %>%
   ggplot(aes(x = week_id, y = value, color = name)) +
@@ -36,7 +35,6 @@ features <-
 
 features +
   scale_color_jcolors('pal8') +
-  scale_x_continuous(breaks = scales::pretty_breaks()) +
   scale_y_continuous(breaks = scales::pretty_breaks()) +
   theme_brookings() +
   theme(legend.position = 'none') +
