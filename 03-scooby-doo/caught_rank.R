@@ -71,7 +71,7 @@ caught_rank %>%
     panel.background = element_rect(color = "#FAFAFA")
   ) +
 
-    labs(title = "Shaggy switches to Sativa",
+    labs(title = "Shaggy steps up",
          subtitle = "Characters with most monsters caught by decade",
          x = NULL,
          y = NULL,
@@ -79,7 +79,7 @@ caught_rank %>%
          )
 
 ggsave(
-  here::here('figures', '03-rank-caught.png'),
+  here::here('03-scooby-doo', 'rank-caught.png'),
   width = 85 * (14 / 5),
   height = 53 * (14 / 5),
   units = 'mm',
