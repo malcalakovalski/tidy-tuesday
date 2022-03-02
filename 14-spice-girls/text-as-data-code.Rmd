@@ -1,0 +1,842 @@
+
+#  What is "text as data"
+
+**Natural Language Processing (NLP)**: A natural language is any language that developed *naturally* through use. Non-natural languages are purposefully created (e.g., computer languages). Thus, NLP uses computers to analyze natural language. 
+
+--
+
++ A **corpus** is a (typically) *large* collection of documents (e.g., books by Jane Austen)
+
+--
+
++ A **document** is an element of a corpus (e.g., *Sense and Sensibility*)  
+
+--
+
++ A **token** is an element of a document (e.g., "Darcy")
+
+--
+
+.content-box-blue[
+These terms have a hierarchy, but not specific meanings:
+
++ Corpora might be tweets, chapters, speeches, paragraphs, etc. 
++ Documents might be tweets, chapters, paragraphs, speeches, etc.
++ Tokens might be lines, sentences, n-grams, words, etc.
+]
+
+
+---
+# The text-as-data pipeline
+
+```{r echo = FALSE, out.width = '60%'}
+knitr::include_graphics("grimmer.png")
+```
+
+---
+
+class: inverse, center, middle
+name: r4ds
+
+---
+# Describing a document as a "bag of words"
+
+From the "About Brookings" page:
+
+> Brookings brings together more than 300 leading experts in government and academia from all over the world who provide the highest quality research, policy recommendations, and analysis on a full range of public policy issues. The research agenda and recommendations of Brookings’s experts are rooted in open-minded inquiry and our 300+ scholars represent diverse points of view. Research topics cover foreign policy, economics, development, governance and metropolitan policy. The Brookings Institution traces its beginnings to 1916, when a group of leading reformers founded the Institute for Government Research (IGR), the first private organization devoted to analyzing public policy issues at the national level.The Brookings Institution is a nonprofit organization devoted to independent, in-depth research that leads to pragmatic and innovative ideas on how to solve problems facing society. Brookings’s commitment to institutional independence is rooted in the individual independence of its scholars. Therefore, the Institution does not take positions on issues.
+
+
+---
+# Describing a document as a "bag of words"
+
+"About Brookings" as a bag of words:
+
+```{r echo=FALSE, results="asis"}
+dd <- data.frame(txt="Brookings brings together more than 300 leading experts in government and academia from all over the world who provide the highest quality research, policy recommendations, and analysis on a full range of public policy issues. The research agenda and recommendations of Brookings’s experts are rooted in open-minded inquiry and our 300+ scholars represent diverse points of view. Research topics cover foreign policy, economics, development, governance and metropolitan policy.The Brookings Institution traces its beginnings to 1916, when a group of leading reformers founded the Institute for Government Research (IGR), the first private organization devoted to analyzing public policy issues at the national level.The Brookings Institution is a nonprofit organization devoted to independent, in-depth research that leads to pragmatic and innovative ideas on how to solve problems facing society. Brookings’s commitment to institutional independence is rooted in the individual independence of its scholars. Therefore, the Institution does not take positions on issues.", stringsAsFactors = F)
+dd %>% tidytext::unnest_tokens(word, txt) %>% 
+  table() %>% 
+  as.list() %>% jsonlite::toJSON(auto_unbox=TRUE) %>%
+  str_replace_all(",",", ") %>% 
+  str_replace_all('"|\\}|\\{',"") %>%
+  writeLines() 
+```
+
+---
+# Beyond bags of words
+
+* Bags of words approaches have underpinned most common text-as-data questions and are used in a variety of approaches to NLP:
+
+--
+
+  + **Sentiment analysis**: Analyses an incoming message and identifies whether the underlying sentiment is positive, negative our neutral. 
+
+--
+  
+  + **Classification**: Automatically analyze text and then assign a set of pre-defined tags or categories based on content (supervised process -- *we* select the terms).
+
+--
+
+  + **Topic modeling**:  Process of grouping similar texts together and discovering topics/focus, without knowing which topics the data belong to (unsupervised process -- we select the number of terms, but there is no model training and no predefined terms.)
+  
+--
+  
+.blue[Similarities between documents are functions of their word/token frequencies.]
+
+--
+
+.content-box-blue[
+Newest frontier in NLP looks at word embedding approaches to use information about word location/underlying meaning (e.g., king vs. queen) to find related content.
+] 
+
+
+---
+# Beyond bags of words
+
+.pull-left[
+**Raw Data**
+```{r}
+library(janeaustenr)
+
+austen_text  <- austen_books() %>%
+  filter(text != "")
+head(austen_text) #raw text data
+```
+]
+
+.pull-right[
+**Tokenizing Data**
+```{r}
+library(tidytext)
+#library(dplyr)
+tidy_austen_text<- austen_text %>%
+    select(book, text) %>%
+    unnest_tokens("word", text) 
+
+head(tidy_austen_text)
+```
+]
+
+---
+# The Document-Term Matrix
+
+- Matrix where each word is a row and each columm is a document. 
+
+--
+
+- The number within each cell describes the number of times the word appears in the document. 
+
+--
+
+- Many of the most popular forms of text analysis, such as topic models, require a document term matrix.
+
+--
+
+.pull-left[
+```{r}
+tidy_austen_DTM <-  tidy_austen_text %>%
+  count(book, word) %>%
+  cast_dtm(book, word, n)
+
+```
+##What does it look like?
+
+]
+
+--
+
+.pull-right[
+```{r, echo= FALSE, eval= FALSE}
+
+inspect(tidy_austen_DTM)
+```
+```{r echo = FALSE, out.width = '90%'}
+knitr::include_graphics("dtm.png")
+```
+]
+
+
+---
+##Term Frequency-Inverse Document Frequency
+- Common practice in quantitative text analysis to identify *unusual words* that might set one document apart from the others.
+
+--
+
+.pull-left[
+```{r}
+tidy_austentfidf<- austen_text %>%
+    select(book,text) %>%
+      unnest_tokens("word", text) %>%
+        anti_join(stop_words) %>%
+           count(word, book) %>%
+              bind_tf_idf(word, book, n)
+
+top_tfidf<-tidy_austentfidf %>%
+  arrange(desc(tf_idf))
+
+top_tfidf$word[1:4]
+
+```
+]
+
+--
+
+.pull-right[
+-  *Tf-idf* increases the more a term appears in a document but it is negatively weighted by the overall frequency of terms across all documents in the dataset. 
+
+-  In simpler terms, the *tf-idf* helps us capture which words are not only important within a given document but also distinctive vis-a-vis the broader `tidytext` dataset.
+]
+
+---
+#n-grams
+
+
+.pull-left[
+So far we've considered words as individual units. However, many interesting text analyses are based on the relationships between words, whether examining which words tend to follow others immediately, or that tend to co-occur within the same documents.
+
++ Rather than looking at relationships between individual words, we can look at relationships between n-grams. 
+    
+    + N-gram is the general term for pairs of words, but we can have bigrams, trigrams, etc.]
+
+--
+
+.pull-right[
+```{r}
+#library(dplyr)
+#library(tidytext)
+
+austen_bigrams <- austen_text %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) #the same unnest tokens call
+
+head(austen_bigrams %>%
+  count(bigram, sort = TRUE))
+```
+]
+
+---
+#n-grams
+
+This ends up not being very interesting. Let's try to remove stopwords (discussed more in the next section).
+
+--
+
+.pull-left[
+```{r}
+library(tidyr)
+
+bigrams_separated <- austen_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ") #separating by a space
+
+bigrams_filtered <- bigrams_separated %>%
+  filter(!word1 %in% stop_words$word) %>% #removing any lines where the first bigram word is a stopword
+  filter(!word2 %in% stop_words$word) #removing any lines where the second bigram word is a stopword
+
+# new bigram counts:
+bigram_counts <- bigrams_filtered %>% 
+  count(word1, word2, sort = TRUE)
+```
+]
+
+--
+
+.pull-right[
+```{r, echo = FALSE}
+head(bigram_counts)
+```
+]
+
+---
+
+#n-grams
+.pull-left[
+```{r}
+
+bigrams_united <- bigrams_filtered %>%
+  unite(bigram, word1, word2, sep = " ") #combine words together again
+
+bigram_tf_idf <- bigrams_united %>%
+  count(book, bigram) %>%
+  bind_tf_idf(bigram, book, n) %>%
+  arrange(desc(tf_idf))
+```
+]
+
+--
+
+.pull-right[
+```{r, echo = FALSE}
+head(bigram_tf_idf)
+```
+]
+
+--
+
+*Units that distinguish each Austen book are almost exclusively names.*
+
+---
+
+class: inverse, center, middle
+name: r4ds
+
+---
+
+# Text Pre-Processing
+
+--
+
+**How we get from text to numeric representations of text.**
+
+--
+
+- **Step 1**: Tidy the text 
+
+--
+
+- **Step 2**: Remove stopwords
+
+--
+
+- **Step 3**: Remove punctuation - `tidytext` removes this automatically
+
+--
+
+- **Step 4**: Remove numbers
+
+--
+
+- **Step 5**: Standardize word casing - `tidytext` standardizes all wordcasing automatically
+
+--
+
+- **Step 6**: Remove white spaces
+
+--
+
+- **Step 7**: Stemming
+
+
+--
+
+*You will likely follow these steps to start every text-as-data project!*
+
+---
+
+#tidytext
+
+.blue[`tidytext` is a package developed to make many text mining tasks easier, more effective, and consistent with tools already in wide use.]
+
+--
+
+- Text that is in `tidytext` format contains one word per row, and each row can also includes additional information about the name of the document where the word appears or the order in which the words appear.
+
+--
+
+.pull-left[
+```{r}
+tidy_austen_text<- austen_text %>%
+    select(book, text) %>%
+    unnest_tokens("word", text)
+
+#arrange words in descending order
+
+tidy_austen_text_desc <- tidy_austen_text %>%
+  count(word) %>%
+    arrange(desc(n))
+```
+]
+
+--
+
+.pull-right[
+```{r, echo= FALSE}
+tidy_austen_text_desc
+```
+]
+---
+
+#Removing stopwords
+
+.pull-left[
+```{r}
+ data("stop_words")
+    tidy_austen_text<-tidy_austen_text %>%
+      anti_join(stop_words)
+```
+]
+
+--
+
+.pull-right[
+```{r}
+tidy_austen_text %>%
+  count(word) %>%
+    arrange(desc(n))
+```
+]
+
+
+---
+
+#Removing Numbers
+
+```{r}
+tidy_austen_text<-tidy_austen_text[-grep("\\b\\d+\\b", tidy_austen_text$word),] #this is regular expressions
+
+```
+
+--
+
+*the `\\b\\d+\\b` text here tells R to remove all numeric digits and the ‘-’ sign means grep excludes them rather than includes them*
+
+--
+
+#Removing whitespaces
+
+```{r}
+tidy_austen_text$word <- gsub("\\s+","",tidy_austen_text$word) #s+ describes a blank space
+
+```
+
+---
+
+#Stemming
+
+- Stemming a word refers to replacing it with its most basic conjugate form (e.g., eat vs. eating)
+
+--
+
+.pull-left[
+```{r, warning=FALSE}
+
+library(SnowballC) #used for stemming words with function wordStem()
+  tidy_austen_text<-tidy_austen_text %>%
+      mutate_at("word", funs(wordStem((.), language="en")))
+  
+head(tidy_austen_text)
+```
+]
+
+--
+
+.pull-right[
+*While text preprocessing can help with comparisons across documents, be wary that it can also remove important context or information! (e.g., the word "no" or "not")*
+]
+
+
+---
+
+class: inverse, center, middle
+name: r4ds
+
+---
+# Word Counting
+
+```{r}
+tidy_austen_texts<- austen_text %>% #start from the beginning, with the original text dataset
+    select(book,text) %>%
+    unnest_tokens("word", text) #create tidytext dataframe
+
+data("stop_words") #load stop words
+```
+
+--
+```{r}
+austen_top_words<- tidy_austen_texts %>%
+      anti_join(stop_words) %>% #remove stop words
+        count(word) %>% #count the number of words
+        arrange(desc(n)) #arrange them so the largest quantity of "n" is on top
+```
+--
+
+```{r}
+#select only top words
+top_20<-austen_top_words[1:20,]
+
+#create factor variable to sort by frequency
+top_20$word <- factor(top_20$word, levels =top_20$word[order(top_20$n,decreasing=TRUE)])
+    
+```
+
+--
+
+**Let’s make a graph of the top 20 words.**
+
+---
+#Word Counting (2)
+
+
+```{r}
+plot <- ggplot(top_20, aes(x=word, y=n, fill=word)) + geom_bar(stat="identity") + theme_minimal()+
+  ylab("Number of Times Word Appears in Austen's Books")+ coord_flip() + theme(legend.position = "none")
+
+```
+
+--
+
+```{r, echo=FALSE, out.width='60%'}
+plot
+```
+
+---
+# Dictionary-Based Quantitative Text Analysis
+
+**Creating your own dictionary**
+
+--
+
+Subset those sentences that contain words associated with the `wealth`. To do this, we could first create a list or "dictionary" of terms that are associated with wealth (based off of qualitative knowledge).
+
+--
+
+```{r, warning= FALSE}
+wealth_dictionary <-c("money","pounds","worth","cost", "wealth")
+
+library(stringr) #used for character string manipulation
+wealth_texts<-austen_text[str_detect(austen_text$text, wealth_dictionary),]
+```
+
+--
+
+```{r, echo=FALSE}
+head(wealth_texts)
+```
+
+---
+# Dictionary-Based Quantitative Text Analysis
+
+**What is the challenge with this approach?**
+
+--
+
+- Inevitably will miss something, but hopefully can be useful for answering questions
+
+--
+
+  - Requires some manual review to avoid false positives; difficult to avoid false negatives
+  
+--
+
+## An Example
+
+--
+
+- Research project investigating the role of political podcasts in promoting election fraud claims. 
+
+--
+
+  - Built my own dictionary of words and tried to be very thorough
+
+--
+
+  - Dramatically reduced labor required to classify over 5,000 hours of transcripts (completed in 4 days)
+
+---
+# Dictionary-Based Quantitative Text Analysis
+
+```{r echo = FALSE, out.width = '75%'}
+knitr::include_graphics("prop-election-fraud-claims-episode.png")
+```
+
+---
+
+#Sentiment Analysis
+
+* Scoring documents based on word usage.
+
+--
+
+* Provides mappings from words used to a numerical value that "measures" some feature of the text of the document.
+
+--
+
+* Often, these approaches are used to measure emotional sentiment (anger, happiness, etc).
+
+--
+
+* Attaches sentiment values to each word in a lexicon (dictionary) of predefined words and then adds up the sentiment values with associated with individual word in a document using the lexicon.
+
+--
+
+* In sentiment analysis, the "meaning"/sentiment of words is determined ex ante by the analyst, often via dictionary.
+
+--
+
+.blue[Perhaps the most straightforward notion of automated content analysis.]
+
+---
+
+#Sentiment Analysis
+
+* [NRC](https://saifmohammad.com/WebPages/NRC-Emotion-Lexicon.htm): "a list of English words and their associations with eight basic emotions (anger, fear, anticipation, trust, surprise, sadness, joy, and disgust) and two sentiments (negative and positive)."
+
+--
+
+* [Bing](https://www.cs.uic.edu/~liub/FBS/sentiment-analysis.html): Bing Lui's lexicon of sentiment.  See *Sentiment Analysis: mining opinions, sentiments, and emotions.* Cambridge University Press, 2015.
+
+--
+
+* [AFINN](http://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=6010): "a list of English words rated for valence with an integer between minus five (negative) and plus five (positive). The words have been manually labeled by Finn Årup Nielsen in 2009-2011." 
+
+--
+
+* [Loughran](https://sraf.nd.edu/textual-analysis/resources/#LM%20Sentiment%20Word%20Lists):  Codes texts as: Negative, Positive Uncertainty, Litigious, Modal, Constraining, Superfluous.
+
+--
+
+.content-box-blue[
+These are well-known sentiment lexicons. That does not mean they are appropriate or useful in every situation.
+]
+
+
+
+---
+#Sentiment Analysis
+
+.pull-left[
+```{r}
+#install.packages('textdata')
+library(textdata) #used for sentiment lexicons
+head(get_sentiments("bing"))
+
+austen_sentiment <- tidy_austen_texts %>%
+  inner_join(get_sentiments("bing")) %>%
+    count(book, sentiment) 
+```
+]
+
+--
+
+.pull-right[
+```{r}
+head(austen_sentiment)
+```
+]
+
+---
+#Sentiment Analysis
+
+.pull-left[
+```{r}
+
+austen_sentiment_plot <-  tidy_austen_texts %>%
+    inner_join(get_sentiments("bing")) %>% 
+      filter(sentiment=="negative") %>%
+          count(book, sentiment)
+```
+
+```{r, echo=FALSE}
+head(austen_sentiment_plot)
+
+```
+]
+
+--
+
+.pull-right[
+```{r}
+ggplot(austen_sentiment_plot, aes(x=book, y=n))+  geom_bar(stat = "identity")+
+    theme_minimal()+ ylab("Number of Negative Words in Austen Books")+ xlab("Book")
+```
+]
+
+---
+
+#Sentiment Analysis with Bigrams
+
+.pull-left[
+```{r}
+AFINN <- get_sentiments("afinn")
+
+head(AFINN)
+
+```
+]
+
+--
+
+.pull-right[
+```{r}
+negation_words <- c("not", "no", "never", "without")
+
+negated_words <- bigrams_separated %>%
+  filter(word1 %in% negation_words) %>% #find negation word in first term
+  inner_join(AFINN, by = c(word2 = "word")) %>% #get afinn sentiment for second word
+  count(word1, word2, value, sort = TRUE) %>% 
+  arrange(desc(n)) %>% 
+  group_by(word1) %>% slice(1:10) %>% #get the top 10 values per term
+  mutate(x_lab = value*n,
+         bar_color = ifelse(x_lab < 0 , "negative", "positive"))
+
+```
+]
+---
+#Sentiment Analysis with Bigrams
+
+
+```{r, out.width = '70%'}
+
+ggplot(negated_words, aes(forcats::fct_reorder(word2, x_lab), x_lab, fill = bar_color)) +  geom_bar(stat= "identity") + facet_wrap(~word1,scales='free') + coord_flip() +  xlab("Words preceded by negation term") + ylab("Sentiment Value*# of Occurrences") + theme_minimal() +  theme(legend.position = "none")
+
+```
+
+---
+#Sentiment Analysis in Action
+
+.pull-left[
+- **Research Question:** What was the effect of the Johnson and Johnson vaccine pause in mid-April 2021 on sentiments about vaccines?
+
+- **Data:** Twitter, Facebook, Reddit and Instagram posts that reference the words vaccines, J&J, Pfizer, Moderna, AstraZeneca, etc.
+
+- **Analyses:** Calculating the sentiment score of each post and averaging it by day, by platform. (*Note: This uses a sentiment analysis strategy ([VADER](https://github.com/cjhutto/vaderSentiment)) that is a bit more complicated, but only available in Python.*)
+]
+
+--
+
+.pull-right[
+```{r echo = FALSE, out.width = '90%'}
+knitr::include_graphics("figure-1-loop.gif")
+```
+]
+
+
+---
+
+class: inverse, center, middle
+name: r4ds
+
+---
+
+# Topic Modeling
+
+- Latent Dirichlet allocation (LDA) is a standard topic model
+
+--
+
+- Topic models find patterns of words appearing together
+
+--
+
+- Searching for patterns rather than predicting is known as unsupervised learning
+
+--
+
+```{r}
+library(topicmodels) #used for building topic models
+data("AssociatedPress")
+
+AP_topic_model<-LDA(AssociatedPress, k=8, control = list(seed = 321))
+
+
+AP_topics <- tidy(AP_topic_model, matrix = "beta")
+
+ap_top_terms <- AP_topics %>% #get the top 10 terms per topic by their beta
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+```
+
+---
+#Topic Modeling
+
+```{r, out.width = '60%'}
+ap_top_terms %>%  mutate(term = reorder(term, beta)) %>%  ggplot(aes(term, beta, fill = factor(topic))) +  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +  coord_flip()
+```
+---
+#Some Tips for Topic Modeling
+
+- Adding topics that are different is good
+
+--
+
+- If we start repeating topics, we've gone too far
+
+--
+
+  - An `elbow plot` can help you formally determine where this point is!
+  
+
+```{r echo = FALSE, out.width = '40%'}
+knitr::include_graphics("download.png")
+```
+    
+--
+
+- Name the topics based on the combination of high-probability words
+
+---
+
+#Where can we get text data to analyze?
+
+--
+
+- Webscraping (`rvest`/`RSelenium` in R; `Beautiful Soup`/`Selenium` in Python.)
+
+--
+
+- Social media (Twitter API, Google API, CrowdTangle)
+
+--
+
+- Speeches
+
+--
+
+- Political platforms
+
+--
+
+*Really any type of text can be turned into data to be quantified using these tools!*
+
+---
+
+#What types of questions can we answer?
+
+--
+
+- Public opinion/opinion mining questions (e.g., from reviews)
+
+--
+
+- How do legislators vote? In what ways are they organized? Party? Ideology? (e.g., from speeches or texts of bills)
+
+--
+
+- How common is the sharing of misinformation? (e.g., from tweets, fact checks, etc.)
+
+--
+
+- What are the main concerns of citizens filing 311 requests? How do these vary by location? 
+
+--
+
+- Does shutting down the internet affect the type of content that is shared on social media? 
+
+--
+
+*And many, many more!*
+
+---
+#Parting thoughts
+
+```{r echo = FALSE, out.width = '80%'}
+knitr::include_graphics("principles.png")
+```
+
+---
+#References
+
+As with all R programming, there are tons of amazing resources online for text analysis. This workshop draws inspiration and adapts materials from a lot of places:
+
+1) [The `tidytext` guide](https://www.tidytextmining.com/index.html)
+
+2) Course materials from [Chris Bail's Text as Data course](https://cbail.github.io/textasdata/Text_as_Data.html)
+
+3) Course materials from [Arthur Spiring's Text as Data course](https://github.com/ArthurSpirling/text-as-data-class-spring2021)
+
+4) Course materials from Jeffrey Lewis' Text as Data course (*unavailable online*)
+
+5) Grimmer, Justin, and Brandon M. Stewart. "[Text as data: The promise and pitfalls of automatic content analysis methods for political texts](https://www.jstor.org/stable/pdf/24572662.pdf?casa_token=XkPPrrcp0awAAAAA:yaOplheKXkrPorL08O8MUgEJrYR1X1kAxlbUvYwUaUIkcReehc5zI837n-55nK4ChuTb0LPvAYmQOqVuEqoFxf_-X_jllXHppYR3kIOvX9Htg1gEEfqB)." \textit{Political analysis} 21, no. 3 (2013): 267-297.
+
+---
+#Questions?
