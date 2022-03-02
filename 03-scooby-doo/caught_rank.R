@@ -85,5 +85,5 @@ ggsave(
   units = 'mm',
   dpi = 300,
   type = 'cairo',
-  device = agg_png()
+  bg = '#FAFAFA'
 )
